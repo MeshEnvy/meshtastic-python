@@ -137,17 +137,10 @@ class BLEInterface(MeshInterface):
             verbose = cli_verbosity_full_enabled()
             debug = cli_verbosity_debug_enabled()
             normal_mode = not (debug or verbose)
-            scan_message = "Scanning for BLE..."
-            logger.debug(
+
+            logger.info(
                 "Scanning for BLE devices (takes %s seconds)...", scan_duration
             )
-            if normal_mode:
-                sys.stdout.write(scan_message)
-                sys.stdout.flush()
-            else:
-                logger.info(
-                    "Scanning for BLE devices (takes %s seconds)...", scan_duration
-                )
 
             devices: dict[str, tuple[BLEDevice, Any]] = {}
             elapsed = 0
@@ -176,7 +169,7 @@ class BLEInterface(MeshInterface):
                             )
                             rssi = getattr(adv, "rssi", None)
                             rssi_suffix = f" rssi={rssi}" if rssi is not None else ""
-                            print(
+                            logger.info(
                                 f'Found BLE device "{display_name}"{address_suffix}{rssi_suffix}'
                             )
                         logger.debug(
@@ -235,17 +228,11 @@ class BLEInterface(MeshInterface):
         # Bleak docs recommend always doing a scan before connecting (even if we know addr)
         device = self.find_device(address)
         display_name = device.name or device.address or repr(device)
-        if cli_verbosity_full_enabled():
-            print(f'Connecting to BLE device "{display_name}"...', flush=True)
-        elif cli_verbosity_progress_enabled():
-            print("Connecting to BLE device...", flush=True)
+        logger.info(f'Connecting to BLE device "{display_name}"...')
 
         client = BLEClient(device.address, disconnected_callback=lambda _: self.close())
         client.connect()
-        if cli_verbosity_full_enabled():
-            print("Discovering BLE services...", flush=True)
-        elif cli_verbosity_progress_enabled():
-            print("Negotiating services...", flush=True)
+        logger.info("Discovering BLE services...")
         client.discover()
         return client
 

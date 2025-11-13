@@ -173,6 +173,7 @@ class MeshInterface:  # pylint: disable=R0902
         self._localChannels = None
         self.fs = FsInterface(self)
         self.verbosity: VerbosityType = get_cli_verbosity()
+        self._node_progress_pending: bool = False
 
         # We could have just not passed in debugOut to MeshInterface, and instead told consumers to subscribe to
         # the meshtastic.log.line publish instead.  Alas though changing that now would be a breaking API change
@@ -1195,12 +1196,7 @@ class MeshInterface:  # pylint: disable=R0902
             show_progress = progress_enabled or default_progress
 
             if show_progress:
-                label = (
-                    "Establishing radio link"
-                    if progress_enabled
-                    else "Connecting to radio"
-                )
-                sys.stdout.write(f"{label}")
+                sys.stdout.write("Connecting to radio...")
                 sys.stdout.flush()
 
                 deadline = time.time() + timeout
@@ -1290,6 +1286,7 @@ class MeshInterface:  # pylint: disable=R0902
             []
         )  # empty until we start getting channels pushed from the device (during config)
 
+        logger.info("Initiating radio connection...")
         startConfig = mesh_pb2.ToRadio()
         if self.configId is None or not self.noNodes:
             self.configId = random.randint(0, 0xFFFFFFFF)
@@ -1447,11 +1444,23 @@ class MeshInterface:  # pylint: disable=R0902
             # self.nodesByNum[node["num"]] = node
             if "user" in node:  # Some nodes might not have user/ids assigned yet
                 if "id" in node["user"]:
+                    if is_new_node and self.verbosity in (
+                        VerbosityType.PROGRESS_ONLY,
+                        VerbosityType.FULL,
+                    ):
+                        sys.stdout.write(".")
+                        sys.stdout.flush()
+                        self._node_progress_pending = True
+
                     if (
                         self == getattr(self, "localNode", None)
                         and self.verbosity == VerbosityType.FULL
                         and is_new_node
                     ):
+                        if self._node_progress_pending:
+                            sys.stdout.write("\n")
+                            sys.stdout.flush()
+                            self._node_progress_pending = False
                         identifier = node["user"].get("id")
                         short_name = node["user"].get("shortName")
                         long_name = node["user"].get("longName")
@@ -1472,6 +1481,10 @@ class MeshInterface:  # pylint: disable=R0902
                 )
             )
         elif fromRadio.config_complete_id == self.configId:
+            if self._node_progress_pending:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+                self._node_progress_pending = False
             # we ignore the config_complete_id, it is unneeded for our
             # stream API fromRadio.config_complete_id
             logger.debug(f"Config complete ID {self.configId}")
